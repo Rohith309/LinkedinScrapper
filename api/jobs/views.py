@@ -14,6 +14,33 @@ class JobList(APIView):
     """
     API endpoint that scrapes and returns a list of jobs from LinkedIn.
     """
+    def scrape_linkedin(self, url):
+        """
+        Launches a headless Chrome browser to scrape the given URL.
+        Returns the page's HTML content.
+        """
+        # Setup Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+
+        # Add proxy support
+        if settings.PROXY_HOST and settings.PROXY_PORT:
+            proxy_url = f"{settings.PROXY_HOST}:{settings.PROXY_PORT}"
+            chrome_options.add_argument(f'--proxy-server={proxy_url}')
+
+        # Initialize WebDriver
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+
+        driver.get(url)
+        time.sleep(5)  # Wait for dynamic content to load
+
+        html = driver.page_source
+        driver.quit()
+        return html
+
     def get(self, request, format=None):
         """
         Scrape LinkedIn for job listings based on query parameters.
@@ -27,7 +54,6 @@ class JobList(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create a unique cache key and check for cached data
         cache_key = f"jobs_search_{keyword.lower()}_{location.lower()}"
         cached_data = cache.get(cache_key)
         if cached_data:
@@ -35,27 +61,9 @@ class JobList(APIView):
 
         try:
             url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}&location={location}"
+            html = self.scrape_linkedin(url)
 
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-
-            if settings.PROXY_HOST and settings.PROXY_PORT:
-                proxy_url = f"{settings.PROXY_HOST}:{settings.PROXY_PORT}"
-                chrome_options.add_argument(f'--proxy-server={proxy_url}')
-
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            driver.get(url)
-            time.sleep(5) # Allow time for dynamic content to load
-
-            html = driver.page_source
-            driver.quit()
-
-            # --- Start Parsing Logic ---
             soup = BeautifulSoup(html, 'html.parser')
-            # Find all job cards. LinkedIn's classes can change, so this might need updating.
             job_cards = soup.find_all('div', class_='base-card')
 
             jobs_list = []
