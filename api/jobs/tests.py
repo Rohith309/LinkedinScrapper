@@ -257,7 +257,6 @@ class JobApiAndCacheTests(TestCase):
             'location': 'usa',
             'job_type': 'fulltime'
         })
-        
         # Both should be successful and from live source
         self.assertEqual(response1.status_code, status.HTTP_200_OK)
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
